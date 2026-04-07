@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>請假天數計算</title>
+  <style>
+    :root {
+      --bg: #111;
+      --surface: #1c1c1e;
+      --surface2: #2c2c2e;
+      --border: #38383a;
+      --text: #f5f5f5;
+      --text2: #aeaeb2;
+      --accent: #0a84ff;
+      --green: #30d158;
+      --red: #ff453a;
+      --yellow: #ffd60a;
+      --radius: 12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    .app { max-width: 680px; margin: 0 auto; padding: 28px 16px 60px; }
+
+    .header { margin-bottom: 22px; }
+    .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .header p { font-size: 13px; color: var(--text2); }
+
+    /* Mode selector */
+    .mode-selector {
+      display: grid; grid-template-columns: 1fr 1fr;
+      background: var(--surface2); border-radius: 10px; padding: 3px; margin-bottom: 16px;
+    }
+    .mode-btn {
+      background: none; border: none; color: var(--text2); font-family: inherit;
+      font-size: 14px; padding: 9px; border-radius: 8px; cursor: pointer;
+      transition: all 0.15s; font-weight: 500;
+    }
+    .mode-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+
+    /* Card */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
+    .card-title { font-size: 12px; color: var(--text2); font-weight: 500; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .form-group { margin-bottom: 13px; }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 5px; }
+    input[type="date"], input[type="number"] {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 9px 11px; color: var(--text); font-size: 15px;
+      font-family: inherit; outline: none; transition: border-color 0.15s;
+    }
+    input:focus { border-color: var(--accent); }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; cursor: pointer; }
+
+    /* Leave type chips */
+    .leave-types {
+      display: flex; flex-wrap: wrap; gap: 7px;
+    }
+    .leave-chip {
+      border: 2px solid var(--border); border-radius: 999px;
+      padding: 5px 13px; font-size: 13px; cursor: pointer;
+      font-family: inherit; background: none; color: var(--text2);
+      transition: all 0.15s; font-weight: 500;
+    }
+    .leave-chip:hover { border-color: var(--text2); color: var(--text); }
+    .leave-chip.active { color: #fff; border-color: transparent; }
+
+    /* Options */
+    .options { display: flex; flex-direction: column; gap: 10px; }
+    .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; user-select: none; }
+    .checkbox-label input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+    .checkbox-sub { font-size: 12px; color: var(--text2); margin-top: 2px; padding-left: 27px; }
+
+    /* Calc button */
+    .calc-btn {
+      width: 100%; background: var(--accent); border: none; color: #fff;
+      font-family: inherit; font-size: 15px; font-weight: 600; padding: 13px;
+      border-radius: 10px; cursor: pointer; transition: opacity 0.15s; margin-top: 4px;
+    }
+    .calc-btn:hover { opacity: 0.85; }
+
+    /* Warning */
+    .warning { display: none; background: rgba(255,214,10,0.1); border: 1px solid rgba(255,214,10,0.3); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--yellow); margin-bottom: 12px; }
+    .warning.show { display: block; }
+
+    /* Result summary */
+    .result { display: none; margin-top: 18px; }
+    .result.show { display: block; }
+    .result-main { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
+    .result-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+    .result-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .result-row:first-child { padding-top: 0; }
+    .result-label { font-size: 13px; color: var(--text2); flex-shrink: 0; }
+    .result-value { font-size: 15px; font-weight: 600; text-align: right; }
+    .result-value.big { font-size: 22px; }
+    .result-value.green { color: var(--green); }
+
+    /* Calendar */
+    .cal-wrapper { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
+    .cal-month-header { background: var(--surface2); padding: 12px 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--border); }
+    .cal-weekdays { display: grid; grid-template-columns: repeat(7,1fr); background: var(--surface2); border-bottom: 1px solid var(--border); }
+    .cal-wd { text-align: center; padding: 8px 0; font-size: 12px; color: var(--text2); font-weight: 500; }
+    .cal-wd:first-child { color: #ff6b63; }
+    .cal-wd:last-child { color: #409cff; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); }
+    .cal-cell {
+      aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: flex-start; padding: 5px 3px 3px; border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border); min-height: 48px; position: relative;
+    }
+    .cal-cell:nth-child(7n) { border-right: none; }
+    .cal-cell.empty { background: transparent; }
+    .cal-num { font-size: 13px; font-weight: 500; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
+    .cal-cell.sunday .cal-num { color: #ff6b63; }
+    .cal-cell.saturday .cal-num { color: #409cff; }
+    .cal-cell.today .cal-num { background: var(--accent); color: #fff; font-weight: 700; }
+
+    /* Day type backgrounds */
+    .cal-cell.is-weekend { background: rgba(255,69,58,0.06); }
+    .cal-cell.is-holiday { background: rgba(255,214,10,0.08); }
+    .cal-cell.is-makeup { background: rgba(48,209,88,0.07); }
+    /* .cal-cell.is-leave color set dynamically via JS */
+
+    /* Export buttons */
+    .export-btns {
+      display: none; flex-direction: row; gap: 10px; margin-top: 14px;
+    }
+    .export-btns.show { display: flex; }
+    .export-btn {
+      flex: 1; border: none; border-radius: 10px; padding: 12px;
+      font-family: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+      transition: opacity 0.15s;
+    }
+    .export-btn:hover { opacity: 0.85; }
+    .export-btn.pdf   { background: #e53935; color: #fff; }
+    .export-btn.excel { background: #1d6f42; color: #fff; }
+
+    .cal-tag {
+      font-size: 9px; border-radius: 3px; padding: 1px 4px;
+      margin-top: 2px; text-align: center; line-height: 1.4;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .tag-holiday { background: rgba(255,214,10,0.2); color: var(--yellow); }
+    .tag-weekend { background: rgba(255,69,58,0.15); color: #ff6b63; }
+    .tag-makeup  { background: rgba(48,209,88,0.15); color: var(--green); }
+    .tag-leave   { color: #fff; }  /* bg set dynamically */
+
+    /* Legend */
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+    /* Skipped list */
+    .skipped-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .skipped-header { padding: 12px 16px; font-size: 13px; color: var(--text2); background: var(--surface2); border-bottom: 1px solid var(--border); font-weight: 500; }
+    .skipped-list { max-height: 200px; overflow-y: auto; }
+    .skipped-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .skipped-item:last-child { border-bottom: none; }
+    .skipped-date { color: var(--text2); }
+    .skipped-reason { font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+    .skipped-reason.weekend { background: rgba(255,69,58,0.15); color: #ff6b63; }
+    .skipped-reason.holiday { background: rgba(255,214,10,0.15); color: var(--yellow); }
+    .no-skipped { padding: 14px; text-align: center; color: var(--text2); font-size: 13px; }
+
+    @media (max-width: 480px) {
+      .form-row { grid-template-columns: 1fr; }
+      .cal-cell { min-height: 40px; }
+      .cal-tag { font-size: 8px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <h1>📅 請假天數計算</h1>
+    <p>依據人事行政總處中華民國 115 年行事曆</p>
+  </div>
+
+  <div class="mode-selector">
+    <button class="mode-btn active" data-mode="calc-end">計算請畢日期</button>
+    <button class="mode-btn" data-mode="calc-days">計算請假天數</button>
+  </div>
+
+  <!-- 假別 -->
+  <div class="card">
+    <div class="card-title">假別</div>
+    <div class="leave-types" id="leaveTypes"></div>
+  </div>
+
+  <!-- 輸入 -->
+  <div class="card">
+    <div class="card-title">輸入條件</div>
+    <div class="form-group">
+      <label>請假人</label>
+      <input type="text" id="applicantName" placeholder="請輸入姓名" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:15px;font-family:inherit;outline:none;">
+    </div>
+    <div class="form-group">
+      <label>開始日期（請假首日）</label>
+      <input type="date" id="startDate">
+    </div>
+    <div id="daysInputGroup" class="form-group">
+      <label>請假天數（支援半天，如 0.5、1.5）</label>
+      <input type="number" id="leaveDays" min="0.5" step="0.5" placeholder="1">
+    </div>
+    <div id="endDateGroup" class="form-group" style="display:none">
+      <label>結束日期（請假末日）</label>
+      <input type="date" id="endDate">
+    </div>
+  </div>
+
+  <!-- 選項 -->
+  <div class="card">
+    <div class="card-title">計算方式</div>
+    <div class="options">
+      <div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="excludeWeekends" checked>
+          扣除例假日（週六、週日）
+        </label>
+        <div class="checkbox-sub">不將週六、週日計入請假天數</div>
+      </div>
+      <div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="excludeHolidays" checked>
+          扣除國定假日（115 年行事曆）
+        </label>
+        <div class="checkbox-sub">春節、清明、端午、中秋、國慶等假日不計入</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="warning" id="warning"></div>
+  <button class="calc-btn" id="calcBtn">計算</button>
+
+  <!-- 結果 -->
+  <div class="result" id="result">
+    <div class="result-main" id="resultMain"></div>
+
+    <!-- 圖例 -->
+    <div class="legend" id="calLegend"></div>
+
+    <!-- 行事曆 -->
+    <div id="calContainer"></div>
+
+    <!-- 略過清單 -->
+    <div class="skipped-section" id="skippedSection"></div>
+
+    <!-- 匯出按鈕 -->
+    <div class="export-btns" id="exportBtns">
+      <button class="export-btn pdf"   id="exportPdfBtn">&#128196; 匯出 PDF</button>
+      <button class="export-btn excel" id="exportExcelBtn">&#128202; 匯出 Excel</button>
+    </div>
+  </div>
+
+</div>
+<script>
+// ===== 假別定義 =====
+const LEAVE_TYPES = [
+  { id: 'annual',    label: '特別休假', color: '#0a84ff' },
+  { id: 'personal',  label: '事假',     color: '#f97316' },
+  { id: 'sick',      label: '病假',     color: '#22c55e' },
+  { id: 'marriage',  label: '婚假',     color: '#ec4899' },
+  { id: 'funeral',   label: '喪假',     color: '#8b8b8b' },
+  { id: 'official',  label: '公假',     color: '#a855f7' },
+  { id: 'comp',      label: '補休',     color: '#14b8a6' },
+  { id: 'maternity', label: '產假',     color: '#f43f5e' },
+  { id: 'paternity', label: '陪產假',   color: '#6366f1' },
+  { id: 'family',    label: '家庭照顧假', color: '#eab308' },
+];
+
+let selectedLeave = LEAVE_TYPES[0];
+
+// 初始化假別 chips
+const leaveContainer = document.getElementById('leaveTypes');
+LEAVE_TYPES.forEach(lt => {
+  const btn = document.createElement('button');
+  btn.className = 'leave-chip' + (lt.id === selectedLeave.id ? ' active' : '');
+  btn.textContent = lt.label;
+  btn.dataset.id = lt.id;
+  if (lt.id === selectedLeave.id) btn.style.background = lt.color;
+  btn.addEventListener('click', () => {
+    selectedLeave = lt;
+    document.querySelectorAll('.leave-chip').forEach(b => {
+      b.classList.remove('active');
+      b.style.background = '';
+    });
+    btn.classList.add('active');
+    btn.style.background = lt.color;
+    clearResult();
+  });
+  leaveContainer.appendChild(btn);
+});
+
+// ===== 115年（2026年）假日資料 =====
+const HOLIDAYS = new Set([
+  '2026-01-01',                                                     // 元旦
+  '2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20', // 春節
+  '2026-02-27','2026-02-28',                                        // 和平紀念日
+  '2026-04-03','2026-04-04','2026-04-05','2026-04-06',              // 兒童節/清明
+  '2026-06-19',                                                     // 端午節
+  '2026-09-28',                                                     // 中秋節
+  '2026-10-09','2026-10-10',                                        // 國慶日
+]);
+
+const HOLIDAY_NAMES = {
+  '2026-01-01': '元旦',
+  '2026-02-16': '除夕',
+  '2026-02-17': '春節初一',
+  '2026-02-18': '春節初二',
+  '2026-02-19': '春節初三',
+  '2026-02-20': '彈性放假',
+  '2026-02-27': '和平紀念日補假',
+  '2026-02-28': '和平紀念日',
+  '2026-04-03': '兒童節補假',
+  '2026-04-04': '兒童節',
+  '2026-04-05': '清明節',
+  '2026-04-06': '清明節補假',
+  '2026-06-19': '端午節',
+  '2026-09-28': '中秋節',
+  '2026-10-09': '國慶補假',
+  '2026-10-10': '國慶日',
+};
+
+const MAKEUP_WORKDAYS = new Set(['2026-02-14']); // 春節前補班
+
+// ===== 工具 =====
+const WEEKDAYS = ['日','一','二','三','四','五','六'];
+
+function toKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function fromKey(k) { const [y,m,d]=k.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(d,n) { const r=new Date(d); r.setDate(r.getDate()+n); return r; }
+function fmtFull(d) {
+  return `${d.getFullYear()} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日（週${WEEKDAYS[d.getDay()]}）`;
+}
+function fmtShort(d) { return `${d.getMonth()+1}/${d.getDate()}（週${WEEKDAYS[d.getDay()]}）`; }
+
+function isWeekend(d) { const w=d.getDay(); return w===0||w===6; }
+function isHoliday(d) { return HOLIDAYS.has(toKey(d)); }
+function isMakeup(d)  { return MAKEUP_WORKDAYS.has(toKey(d)); }
+function isWorkday(d, exW, exH) {
+  if (isMakeup(d)) return true;
+  if (exW && isWeekend(d)) return false;
+  if (exH && isHoliday(d)) return false;
+  return true;
+}
+function skipReason(d, exW, exH) {
+  const k = toKey(d);
+  if (isMakeup(d)) return null;
+  if (exH && HOLIDAYS.has(k)) return { type:'holiday', label: HOLIDAY_NAMES[k]||'國定假日' };
+  if (exW && isWeekend(d))    return { type:'weekend', label: d.getDay()===6?'週六':'週日' };
+  return null;
+}
+
+// ===== 模式 =====
+let currentMode = 'calc-end';
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentMode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('daysInputGroup').style.display = currentMode==='calc-end' ? '' : 'none';
+    document.getElementById('endDateGroup').style.display   = currentMode==='calc-days'? '' : 'none';
+    clearResult();
+  });
+});
+
+let exportState = null;
+
+function clearResult() {
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('warning').classList.remove('show');
+  document.getElementById('exportBtns').classList.remove('show');
+  exportState = null;
+}
+
+// ===== 計算核心 =====
+function calcEndDate(startDate, days, exW, exH) {
+  const fullDays = Math.floor(days);
+  const hasHalf  = Math.abs(days % 1) >= 0.4;
+  const date = new Date(startDate);
+  let count = 0, skipped = [];
+
+  // 跳過起始日的非工作日
+  while (!isWorkday(date, exW, exH)) {
+    const r = skipReason(date, exW, exH);
+    if (r) skipped.push({ date: new Date(date), reason: r });
+    date.setDate(date.getDate()+1);
+  }
+
+  while (count < fullDays) {
+    if (isWorkday(date, exW, exH)) {
+      count++;
+    } else {
+      const r = skipReason(date, exW, exH);
+      if (r) skipped.push({ date: new Date(date), reason: r });
+    }
+    if (count < fullDays) date.setDate(date.getDate()+1);
+  }
+
+  let endDate = new Date(date);
+
+  if (hasHalf) {
+    date.setDate(date.getDate()+1);
+    while (!isWorkday(date, exW, exH)) {
+      const r = skipReason(date, exW, exH);
+      if (r) skipped.push({ date: new Date(date), reason: r });
+      date.setDate(date.getDate()+1);
+    }
+    endDate = new Date(date);
+  }
+
+  return { endDate, isHalfDay: hasHalf, skipped };
+}
+
+function calcDays(startDate, endDate, exW, exH) {
+  const date = new Date(startDate);
+  let count = 0, skipped = [];
+  while (date <= endDate) {
+    if (isWorkday(date, exW, exH)) { count++; }
+    else {
+      const r = skipReason(date, exW, exH);
+      if (r) skipped.push({ date: new Date(date), reason: r });
+    }
+    date.setDate(date.getDate()+1);
+  }
+  return { count, skipped };
+}
+
+// ===== 計算按鈕 =====
+document.getElementById('calcBtn').addEventListener('click', calculate);
+['startDate','leaveDays','endDate'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', clearResult);
+  document.getElementById(id)?.addEventListener('input', clearResult);
+});
+['excludeWeekends','excludeHolidays'].forEach(id =>
+  document.getElementById(id).addEventListener('change', clearResult)
+);
+
+function calculate() {
+  const startStr = document.getElementById('startDate').value;
+  const exW = document.getElementById('excludeWeekends').checked;
+  const exH = document.getElementById('excludeHolidays').checked;
+  const warnEl = document.getElementById('warning');
+
+  if (!startStr) { showWarning('請輸入開始日期'); return; }
+  const startDate = fromKey(startStr);
+
+  if (currentMode === 'calc-end') {
+    const days = parseFloat(document.getElementById('leaveDays').value);
+    if (!days || days <= 0) { showWarning('請輸入有效的請假天數'); return; }
+
+    if (!isWorkday(startDate, exW, exH)) {
+      const r = skipReason(startDate, exW, exH);
+      showWarning(`注意：開始日期 ${fmtFull(startDate)}${r?'（'+r.label+'）':''} 為非工作日，將從下一個工作日開始計算。`);
+    } else { warnEl.classList.remove('show'); }
+
+    const { endDate, isHalfDay, skipped } = calcEndDate(startDate, days, exW, exH);
+    renderResult(startDate, endDate, days, null, isHalfDay, skipped, exW, exH);
+
+  } else {
+    const endStr = document.getElementById('endDate').value;
+    if (!endStr) { showWarning('請輸入結束日期'); return; }
+    const endDate = fromKey(endStr);
+    if (endDate < startDate) { showWarning('結束日期不能早於開始日期'); return; }
+    warnEl.classList.remove('show');
+
+    const { count, skipped } = calcDays(startDate, endDate, exW, exH);
+    renderResult(startDate, endDate, null, count, false, skipped, exW, exH);
+  }
+}
+
+// ===== 渲染結果 =====
+function renderResult(startDate, endDate, reqDays, calcCount, isHalfDay, skipped, exW, exH) {
+  const totalCal = Math.round((endDate - startDate) / 86400000) + 1;
+  const days = reqDays !== null ? reqDays : calcCount;
+
+  // 摘要
+  const resultMain = document.getElementById('resultMain');
+  const leaveColor = selectedLeave.color;
+  const applicant = document.getElementById('applicantName').value.trim();
+  resultMain.innerHTML = `
+    ${applicant ? `<div class="result-row">
+      <span class="result-label">請假人</span>
+      <span class="result-value">${applicant}</span>
+    </div>` : ''}
+    <div class="result-row">
+      <span class="result-label">假別</span>
+      <span class="result-value" style="color:${leaveColor}">${selectedLeave.label}</span>
+    </div>
+    <div class="result-row">
+      <span class="result-label">開始日期</span>
+      <span class="result-value">${fmtFull(startDate)}</span>
+    </div>
+    <div class="result-row">
+      <span class="result-label">${reqDays!==null ? '請畢日期' : '結束日期'}</span>
+      <span class="result-value green">${fmtFull(endDate)}${isHalfDay?'<br><small style="color:var(--text2);font-size:12px">（當日為半天假）</small>':''}</span>
+    </div>
+    <div class="result-row">
+      <span class="result-label">請假天數</span>
+      <span class="result-value big" style="color:${leaveColor}">${days} 天</span>
+    </div>
+    <div class="result-row">
+      <span class="result-label">跨越日曆天 / 略過天數</span>
+      <span class="result-value">${totalCal} 天 / ${skipped.length} 天</span>
+    </div>`;
+
+  // 圖例
+  renderLegend(exW, exH);
+
+  // 月曆
+  renderCalendars(startDate, endDate, skipped, exW, exH);
+
+  // 略過清單
+  renderSkipped(skipped);
+
+  // 儲存匯出狀態
+  exportState = { startDate, endDate, days, isHalfDay, skipped, exW, exH,
+    leave: selectedLeave, leaveDays: buildLeaveDaysSet(startDate, endDate, exW, exH),
+    applicant: document.getElementById('applicantName').value.trim() };
+  document.getElementById('exportBtns').classList.add('show');
+
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('result').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function buildLeaveDaysSet(start, end, exW, exH) {
+  const s = new Set();
+  const d = new Date(start);
+  while (d <= end) { if (isWorkday(d, exW, exH)) s.add(toKey(d)); d.setDate(d.getDate()+1); }
+  return s;
+}
+
+// ===== 圖例 =====
+function renderLegend(exW, exH) {
+  const items = [
+    { color: selectedLeave.color, label: selectedLeave.label },
+    { color: 'rgba(255,69,58,0.3)', label: '例假日', show: exW },
+    { color: 'rgba(255,214,10,0.3)', label: '國定假日', show: exH },
+    { color: 'rgba(48,209,88,0.3)', label: '補班日' },
+  ];
+  document.getElementById('calLegend').innerHTML = items
+    .filter(i => i.show !== false)
+    .map(i => `<div class="legend-item"><div class="legend-dot" style="background:${i.color}"></div><span>${i.label}</span></div>`)
+    .join('');
+}
+
+// ===== 行事曆渲染 =====
+function renderCalendars(startDate, endDate, skipped, exW, exH) {
+  const container = document.getElementById('calContainer');
+  container.innerHTML = '';
+
+  // 建立略過日期 set
+  const skippedKeys = new Set(skipped.map(s => toKey(s.date)));
+
+  // 建立請假日期 set（工作日才標記）
+  const leaveDays = new Set();
+  const d = new Date(startDate);
+  while (d <= endDate) {
+    if (isWorkday(d, exW, exH)) leaveDays.add(toKey(d));
+    d.setDate(d.getDate()+1);
+  }
+
+  // 找出需要渲染的月份
+  const months = [];
+  const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+  while (cur <= endMonth) {
+    months.push(new Date(cur));
+    cur.setMonth(cur.getMonth()+1);
+  }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  months.forEach(monthStart => {
+    const y = monthStart.getFullYear();
+    const m = monthStart.getMonth();
+    const firstDow = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m+1, 0).getDate();
+
+    const wrap = document.createElement('div');
+    wrap.className = 'cal-wrapper';
+    wrap.style.marginBottom = '12px';
+
+    // 月份標題
+    wrap.innerHTML = `
+      <div class="cal-month-header">${y} 年 ${m+1} 月</div>
+      <div class="cal-weekdays">
+        ${['日','一','二','三','四','五','六'].map(w=>`<div class="cal-wd">${w}</div>`).join('')}
+      </div>`;
+
+    const grid = document.createElement('div');
+    grid.className = 'cal-grid';
+
+    // 空格
+    for (let i = 0; i < firstDow; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'cal-cell empty';
+      grid.appendChild(empty);
+    }
+
+    // 日期
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(y, m, day);
+      const key = toKey(date);
+      const dow = date.getDay();
+      const isTo = date.getTime() === today.getTime();
+      const isMk = isMakeup(date);
+      const isHd = isHoliday(date);
+      const isWk = isWeekend(date) && !isMk;
+      const isLv = leaveDays.has(key);
+
+      const cell = document.createElement('div');
+      let cellClass = 'cal-cell';
+      if (dow === 0) cellClass += ' sunday';
+      if (dow === 6) cellClass += ' saturday';
+      if (isTo) cellClass += ' today';
+      if (isLv) cellClass += ' is-leave';
+      else if (isMk) cellClass += ' is-makeup';
+      else if (isHd && exH) cellClass += ' is-holiday';
+      else if (isWk && exW) cellClass += ' is-weekend';
+      cell.className = cellClass;
+
+      // 請假日：背景用假別顏色
+      if (isLv) {
+        cell.style.background = selectedLeave.color + '22';
+        cell.style.outline = `2px solid ${selectedLeave.color}66`;
+        cell.style.outlineOffset = '-2px';
+      }
+
+      // 數字
+      const num = document.createElement('div');
+      num.className = 'cal-num';
+      num.textContent = day;
+      if (isLv) num.style.color = selectedLeave.color;
+      cell.appendChild(num);
+
+      // 標籤
+      const tags = [];
+      if (isLv) tags.push({ cls: 'tag-leave', text: selectedLeave.label, bg: selectedLeave.color });
+      if (isHd && exH) tags.push({ cls: 'tag-holiday', text: HOLIDAY_NAMES[key]||'假日' });
+      else if (isMk) tags.push({ cls: 'tag-makeup', text: '補班' });
+      else if (isWk && exW && !isLv) tags.push({ cls: 'tag-weekend', text: dow===6?'週六':'週日' });
+
+      tags.slice(0,2).forEach(t => {
+        const tag = document.createElement('div');
+        tag.className = 'cal-tag ' + t.cls;
+        tag.textContent = t.text;
+        if (t.bg) tag.style.background = t.bg + 'cc';
+        cell.appendChild(tag);
+      });
+
+      grid.appendChild(cell);
+    }
+
+    wrap.appendChild(grid);
+    container.appendChild(wrap);
+  });
+}
+
+// ===== 略過清單 =====
+function renderSkipped(skipped) {
+  const sec = document.getElementById('skippedSection');
+  if (!skipped.length) {
+    sec.innerHTML = '<div class="no-skipped">本次請假期間無略過之假日</div>';
+    return;
+  }
+  const items = skipped.map(s => `
+    <div class="skipped-item">
+      <span class="skipped-date">${fmtShort(s.date)}</span>
+      <span class="skipped-reason ${s.reason.type}">${s.reason.label}</span>
+    </div>`).join('');
+  sec.innerHTML = `
+    <div class="skipped-header">略過的假日／例假日（${skipped.length} 天）</div>
+    <div class="skipped-list">${items}</div>`;
+}
+
+function showWarning(msg) {
+  const el = document.getElementById('warning');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+// 預設今天
+document.getElementById('startDate').value = toKey(new Date());
+
+// ===== 匯出事件 =====
+document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
+document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
+
+// ===== 共用：產生月曆 HTML 字串 =====
+function buildCalendarHTML(state, forExcel) {
+  const { startDate, endDate, leave, leaveDays, exW, exH } = state;
+  const months = [];
+  const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const endM = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+  while (cur <= endM) { months.push(new Date(cur)); cur.setMonth(cur.getMonth()+1); }
+
+  const WD = ['日','一','二','三','四','五','六'];
+  let html = '';
+
+  months.forEach(ms => {
+    const y = ms.getFullYear(), m = ms.getMonth();
+    const firstDow = new Date(y, m, 1).getDay();
+    const daysInM  = new Date(y, m+1, 0).getDate();
+
+    html += `<table border="1" cellspacing="0" cellpadding="0"
+      style="border-collapse:collapse;width:100%;margin-bottom:20px;font-family:'Microsoft JhengHei',sans-serif;">
+      <tr><th colspan="7"
+        style="background:#f0f0f0;padding:10px;font-size:15px;text-align:center;border:1px solid #ccc;">
+        ${y} 年 ${m+1} 月</th></tr>
+      <tr>`;
+    WD.forEach((w,i) => {
+      const c = i===0?'#c0392b': i===6?'#2980b9':'#555';
+      html += `<th style="width:14.28%;padding:8px 0;text-align:center;font-size:13px;color:${c};background:#f8f8f8;border:1px solid #ddd;">${w}</th>`;
+    });
+    html += '</tr><tr>';
+
+    // 空格
+    for (let i=0; i<firstDow; i++)
+      html += `<td style="border:1px solid #ddd;padding:6px;">&nbsp;</td>`;
+
+    for (let day=1; day<=daysInM; day++) {
+      const date = new Date(y, m, day);
+      const key  = toKey(date);
+      const dow  = date.getDay();
+      const isLv = leaveDays.has(key);
+      const isHd = isHoliday(date);
+      const isMk = isMakeup(date);
+      const isWk = isWeekend(date) && !isMk;
+
+      let color = '#333', weight = 'normal', bg = '#fff';
+      let note = '';
+
+      if (isLv) {
+        weight = 'bold'; color = '#111'; bg = '#fff3cd';
+        note = leave.label;
+      }
+      if ((isWk && exW) || (isHd && exH)) {
+        color = '#c0392b';
+        if (isHd && exH) note = HOLIDAY_NAMES[key] || '國定假日';
+        else if (isWk) note = dow===6?'週六':'週日';
+        if (!isLv) bg = '#fff5f5';
+      }
+      if (isMk) { color = '#27ae60'; note = '補班'; bg = '#f0fff4'; }
+
+      // 週六/日的數字顏色
+      const numColor = isLv ? '#111' : (dow===0?'#c0392b': dow===6?'#2980b9': '#333');
+      const noteHtml = note ? `<div style="font-size:10px;color:${isLv?'#555':color};margin-top:2px;line-height:1.2;">${note}</div>` : '';
+
+      // 每週換行
+      if ((firstDow + day - 1) % 7 === 0 && day !== 1) html += '</tr><tr>';
+
+      html += `<td style="border:1px solid #ddd;padding:5px;vertical-align:top;background:${bg};min-width:40px;">
+        <div style="font-size:14px;font-weight:${weight};color:${numColor};text-align:center;">${day}</div>
+        ${noteHtml}
+      </td>`;
+    }
+
+    // 補足最後一列的空格
+    const total = firstDow + daysInM;
+    const remain = total % 7 === 0 ? 0 : 7 - (total % 7);
+    for (let i=0; i<remain; i++)
+      html += `<td style="border:1px solid #ddd;padding:6px;">&nbsp;</td>`;
+    html += '</tr></table>';
+  });
+  return html;
+}
+
+// ===== PDF 匯出 =====
+function exportPDF() {
+  if (!exportState) return;
+  const { startDate, endDate, days, leave, isHalfDay, applicant } = exportState;
+  const calHtml = buildCalendarHTML(exportState, false);
+  const halfNote = isHalfDay ? '（最後一日為半天）' : '';
+
+  const html = `<!DOCTYPE html><html lang="zh-TW"><head>
+    <meta charset="UTF-8">
+    <title>請假行事曆</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif; background: #fff; color: #333; padding: 24px; }
+      h1 { font-size: 20px; margin-bottom: 4px; }
+      .sub { font-size: 12px; color: #888; margin-bottom: 16px; }
+      .summary { border: 1px solid #ddd; border-radius: 6px; padding: 14px 16px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; }
+      .sum-item { display: flex; flex-direction: column; }
+      .sum-label { font-size: 11px; color: #888; }
+      .sum-value { font-size: 15px; font-weight: 600; }
+      .legend { display: flex; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+      .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+      .leg-box { width: 14px; height: 14px; border-radius: 2px; border: 1px solid #ccc; }
+      .no-print { text-align: center; margin-bottom: 16px; }
+      .print-btn { background: #333; color: #fff; border: none; border-radius: 6px; padding: 10px 28px; font-size: 14px; cursor: pointer; }
+      @media print { .no-print { display: none !important; } body { padding: 8px; } }
+    </style>
+  </head><body>
+    <div class="no-print">
+      <button class="print-btn" onclick="window.print()">列印 / 儲存為 PDF</button>
+    </div>
+    <h1>請假申請行事曆</h1>
+    <div class="sub">依據人事行政總處中華民國 115 年行事曆</div>
+    <div class="summary">
+      ${applicant ? `<div class="sum-item"><span class="sum-label">請假人</span><span class="sum-value">${applicant}</span></div>` : ''}
+      <div class="sum-item"><span class="sum-label">假別</span><span class="sum-value" style="color:${leave.color}">${leave.label}</span></div>
+      <div class="sum-item"><span class="sum-label">開始日期</span><span class="sum-value">${fmtFull(startDate)}</span></div>
+      <div class="sum-item"><span class="sum-label">請畢日期</span><span class="sum-value">${fmtFull(endDate)}${halfNote}</span></div>
+      <div class="sum-item"><span class="sum-label">請假天數</span><span class="sum-value">${days} 天</span></div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="leg-box" style="background:#fff3cd;"></div>請假日（粗體）</div>
+      <div class="legend-item"><div class="leg-box" style="background:#fff5f5;border-color:#c0392b"></div><span style="color:#c0392b">例假日／國定假日（紅字）</span></div>
+      <div class="legend-item"><div class="leg-box" style="background:#f0fff4;border-color:#27ae60"></div><span style="color:#27ae60">補班日</span></div>
+    </div>
+    ${calHtml}
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
+
+// ===== Excel 匯出 =====
+function exportExcel() {
+  if (!exportState) return;
+  const { startDate, endDate, days, leave, isHalfDay, applicant } = exportState;
+  const calHtml = buildCalendarHTML(exportState, true);
+  const halfNote = isHalfDay ? '（最後一日為半天）' : '';
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8">
+  <style>
+    body { font-family: 'Microsoft JhengHei', sans-serif; }
+    table { border-collapse: collapse; }
+    td, th { border: 1px solid #ccc; padding: 5px; }
+  </style>
+  </head><body>
+    <table style="margin-bottom:16px;font-size:13px;">
+      ${applicant ? `<tr><td style="font-weight:bold;background:#f0f0f0;">請假人</td>
+          <td style="font-weight:bold;">${applicant}</td></tr>` : ''}
+      <tr><td style="font-weight:bold;background:#f0f0f0;">假別</td>
+          <td style="color:${leave.color};font-weight:bold;">${leave.label}</td></tr>
+      <tr><td style="font-weight:bold;background:#f0f0f0;">開始日期</td>
+          <td>${fmtFull(startDate)}</td></tr>
+      <tr><td style="font-weight:bold;background:#f0f0f0;">請畢日期</td>
+          <td>${fmtFull(endDate)}${halfNote}</td></tr>
+      <tr><td style="font-weight:bold;background:#f0f0f0;">請假天數</td>
+          <td style="font-weight:bold;">${days} 天</td></tr>
+    </table>
+    ${calHtml}
+  </body></html>`;
+
+  const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `請假行事曆_${leave.label}_${toKey(startDate)}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
