@@ -684,82 +684,68 @@ document.getElementById('startDate').value = toKey(new Date());
 document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
 document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
 
-// ===== 共用：產生月曆 HTML 字串 =====
+// ===== 共用：產生月曆 HTML 字串（單一連續行事曆）=====
 function buildCalendarHTML(state, forExcel) {
   const { startDate, endDate, leave, leaveDays, exW, exH } = state;
-  const months = [];
-  const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-  const endM = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-  while (cur <= endM) { months.push(new Date(cur)); cur.setMonth(cur.getMonth()+1); }
-
   const WD = ['日','一','二','三','四','五','六'];
-  let html = '';
 
-  months.forEach(ms => {
-    const y = ms.getFullYear(), m = ms.getMonth();
-    const firstDow = new Date(y, m, 1).getDay();
-    const daysInM  = new Date(y, m+1, 0).getDate();
+  // 從開始日所在週日 → 結束日所在週六
+  const gridStart = new Date(startDate);
+  gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+  const gridEnd = new Date(endDate);
+  gridEnd.setDate(gridEnd.getDate() + (6 - gridEnd.getDay()));
 
-    html += `<table border="1" cellspacing="0" cellpadding="0"
-      style="border-collapse:collapse;width:100%;margin-bottom:20px;font-family:'Microsoft JhengHei',sans-serif;">
-      <tr><th colspan="7"
-        style="background:#f0f0f0;padding:10px;font-size:15px;text-align:center;border:1px solid #ccc;">
-        ${y} 年 ${m+1} 月</th></tr>
-      <tr>`;
-    WD.forEach((w,i) => {
-      const c = i===0?'#c0392b': i===6?'#2980b9':'#555';
-      html += `<th style="width:14.28%;padding:8px 0;text-align:center;font-size:13px;color:${c};background:#f8f8f8;border:1px solid #ddd;">${w}</th>`;
-    });
-    html += '</tr><tr>';
-
-    // 空格
-    for (let i=0; i<firstDow; i++)
-      html += `<td style="border:1px solid #ddd;padding:6px;">&nbsp;</td>`;
-
-    for (let day=1; day<=daysInM; day++) {
-      const date = new Date(y, m, day);
-      const key  = toKey(date);
-      const dow  = date.getDay();
-      const isLv = leaveDays.has(key);
-      const isHd = isHoliday(date);
-      const isMk = isMakeup(date);
-      const isWk = isWeekend(date) && !isMk;
-
-      let color = '#333', weight = 'normal', bg = '#fff';
-      let note = '';
-
-      if (isLv) {
-        weight = 'bold'; color = '#111'; bg = '#fff3cd';
-        note = leave.label;
-      }
-      if ((isWk && exW) || (isHd && exH)) {
-        color = '#c0392b';
-        if (isHd && exH) note = HOLIDAY_NAMES[key] || '國定假日';
-        else if (isWk) note = dow===6?'週六':'週日';
-        if (!isLv) bg = '#fff5f5';
-      }
-      if (isMk) { color = '#27ae60'; note = '補班'; bg = '#f0fff4'; }
-
-      // 週六/日的數字顏色
-      const numColor = isLv ? '#111' : (dow===0?'#c0392b': dow===6?'#2980b9': '#333');
-      const noteHtml = note ? `<div style="font-size:10px;color:${isLv?'#555':color};margin-top:2px;line-height:1.2;">${note}</div>` : '';
-
-      // 每週換行
-      if ((firstDow + day - 1) % 7 === 0 && day !== 1) html += '</tr><tr>';
-
-      html += `<td style="border:1px solid #ddd;padding:5px;vertical-align:top;background:${bg};min-width:40px;">
-        <div style="font-size:14px;font-weight:${weight};color:${numColor};text-align:center;">${day}</div>
-        ${noteHtml}
-      </td>`;
-    }
-
-    // 補足最後一列的空格
-    const total = firstDow + daysInM;
-    const remain = total % 7 === 0 ? 0 : 7 - (total % 7);
-    for (let i=0; i<remain; i++)
-      html += `<td style="border:1px solid #ddd;padding:6px;">&nbsp;</td>`;
-    html += '</tr></table>';
+  let html = `<table border="1" cellspacing="0" cellpadding="0"
+    style="border-collapse:collapse;width:100%;font-family:'Microsoft JhengHei',sans-serif;">
+    <tr>`;
+  WD.forEach((w,i) => {
+    const c = i===0?'#c0392b': i===6?'#2980b9':'#555';
+    html += `<th style="width:14.28%;padding:8px 0;text-align:center;font-size:13px;color:${c};background:#f8f8f8;border:1px solid #ddd;">${w}</th>`;
   });
+  html += '</tr><tr>';
+
+  const d = new Date(gridStart);
+  let col = 0;
+  while (d <= gridEnd) {
+    const key  = toKey(d);
+    const dow  = d.getDay();
+    const inRange = d >= startDate && d <= endDate;
+    const isLv = leaveDays.has(key);
+    const isHd = isHoliday(d);
+    const isMk = isMakeup(d);
+    const isWk = isWeekend(d) && !isMk;
+
+    let numColor = '#333', weight = 'normal', bg = '#fff';
+    let note = '';
+    const opacity = inRange ? '1' : '0.25';
+
+    if (isLv) {
+      weight = 'bold'; numColor = '#111'; bg = '#fff3cd';
+      note = leave.label;
+    }
+    if ((isWk && exW) || (isHd && exH)) {
+      numColor = '#c0392b';
+      if (isHd && exH) note = HOLIDAY_NAMES[key] || '國定假日';
+      else if (isWk) note = dow===6?'週六':'週日';
+      if (!isLv) bg = '#fff5f5';
+    }
+    if (isMk) { numColor = '#27ae60'; note = '補班'; bg = '#f0fff4'; }
+    if (dow===6 && !isLv && !isWk && !isHd) numColor = '#2980b9';
+
+    const md = `${d.getMonth()+1}/${d.getDate()}`;
+    const noteHtml = note ? `<div style="font-size:10px;color:${isLv?'#555':numColor};margin-top:2px;line-height:1.2;">${note}</div>` : '';
+
+    html += `<td style="border:1px solid #ddd;padding:5px;vertical-align:top;background:${bg};min-width:40px;opacity:${opacity};">
+      <div style="font-size:13px;font-weight:${weight};color:${numColor};text-align:center;">${md}</div>
+      ${noteHtml}
+    </td>`;
+
+    col++;
+    d.setDate(d.getDate()+1);
+    if (col % 7 === 0 && d <= gridEnd) html += '</tr><tr>';
+  }
+
+  html += '</tr></table>';
   return html;
 }
 
