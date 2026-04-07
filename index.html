@@ -100,31 +100,19 @@
     .result-value.big { font-size: 22px; }
     .result-value.green { color: var(--green); }
 
-    /* Calendar */
-    .cal-wrapper { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
-    .cal-month-header { background: var(--surface2); padding: 12px 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--border); }
-    .cal-weekdays { display: grid; grid-template-columns: repeat(7,1fr); background: var(--surface2); border-bottom: 1px solid var(--border); }
-    .cal-wd { text-align: center; padding: 8px 0; font-size: 12px; color: var(--text2); font-weight: 500; }
-    .cal-wd:first-child { color: #ff6b63; }
-    .cal-wd:last-child { color: #409cff; }
-    .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); }
-    .cal-cell {
-      aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
-      justify-content: flex-start; padding: 5px 3px 3px; border-right: 1px solid var(--border);
-      border-bottom: 1px solid var(--border); min-height: 48px; position: relative;
+    /* Compact date view */
+    .date-range-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+    .date-range-title { font-size: 12px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+    .date-range-bar { font-size: 20px; font-weight: 700; margin-bottom: 14px; letter-spacing: 0.5px; }
+    .date-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .date-chip {
+      font-size: 13px; font-weight: 600; padding: 4px 10px;
+      border-radius: 8px; letter-spacing: 0.3px;
     }
-    .cal-cell:nth-child(7n) { border-right: none; }
-    .cal-cell.empty { background: transparent; }
-    .cal-num { font-size: 13px; font-weight: 500; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
-    .cal-cell.sunday .cal-num { color: #ff6b63; }
-    .cal-cell.saturday .cal-num { color: #409cff; }
-    .cal-cell.today .cal-num { background: var(--accent); color: #fff; font-weight: 700; }
-
-    /* Day type backgrounds */
-    .cal-cell.is-weekend { background: rgba(255,69,58,0.06); }
-    .cal-cell.is-holiday { background: rgba(255,214,10,0.08); }
-    .cal-cell.is-makeup { background: rgba(48,209,88,0.07); }
-    /* .cal-cell.is-leave color set dynamically via JS */
+    .date-chip.chip-leave { color: #fff; }
+    .date-chip.chip-holiday { background: rgba(255,214,10,0.15); color: var(--yellow); }
+    .date-chip.chip-weekend { background: rgba(255,69,58,0.12); color: #ff6b63; }
+    .date-chip.chip-makeup  { background: rgba(48,209,88,0.12); color: var(--green); }
 
     /* Export buttons */
     .export-btns {
@@ -557,117 +545,75 @@ function renderLegend(exW, exH) {
     .join('');
 }
 
-// ===== 行事曆渲染 =====
+// ===== 行事曆渲染（緊湊 M/D 格式）=====
+function fmtMD(date) {
+  return `${date.getMonth()+1}/${date.getDate()}`;
+}
+
 function renderCalendars(startDate, endDate, skipped, exW, exH) {
   const container = document.getElementById('calContainer');
   container.innerHTML = '';
 
-  // 建立略過日期 set
-  const skippedKeys = new Set(skipped.map(s => toKey(s.date)));
+  const skippedMap = new Map(skipped.map(s => [toKey(s.date), s.reason]));
 
-  // 建立請假日期 set（工作日才標記）
-  const leaveDays = new Set();
+  const card = document.createElement('div');
+  card.className = 'date-range-card';
+
+  // 標題
+  const title = document.createElement('div');
+  title.className = 'date-range-title';
+  title.textContent = '請假期間';
+  card.appendChild(title);
+
+  // 起～迄
+  const bar = document.createElement('div');
+  bar.className = 'date-range-bar';
+  const sameDay = toKey(startDate) === toKey(endDate);
+  bar.innerHTML = sameDay
+    ? `<span style="color:${selectedLeave.color}">${fmtMD(startDate)}</span>`
+    : `<span style="color:${selectedLeave.color}">${fmtMD(startDate)}</span>`
+      + `<span style="color:var(--text2);font-weight:400;margin:0 8px">～</span>`
+      + `<span style="color:${selectedLeave.color}">${fmtMD(endDate)}</span>`;
+  card.appendChild(bar);
+
+  // 逐日列出
+  const chips = document.createElement('div');
+  chips.className = 'date-chips';
+
   const d = new Date(startDate);
   while (d <= endDate) {
-    if (isWorkday(d, exW, exH)) leaveDays.add(toKey(d));
+    const key = toKey(d);
+    const isMk = isMakeup(d);
+    const isHd = isHoliday(d);
+    const isWk = isWeekend(d) && !isMk;
+    const isLv = isWorkday(d, exW, exH);
+    const reason = skippedMap.get(key);
+
+    const chip = document.createElement('div');
+    chip.className = 'date-chip';
+    chip.textContent = fmtMD(d);
+
+    if (isLv) {
+      chip.classList.add('chip-leave');
+      chip.style.background = selectedLeave.color + 'cc';
+    } else if (reason) {
+      if (reason.type === 'holiday') chip.classList.add('chip-holiday');
+      else if (isMk) chip.classList.add('chip-makeup');
+      else chip.classList.add('chip-weekend');
+    } else if (isHd) {
+      chip.classList.add('chip-holiday');
+    } else if (isWk) {
+      chip.classList.add('chip-weekend');
+    } else if (isMk) {
+      chip.classList.add('chip-makeup');
+    }
+
+    chips.appendChild(chip);
     d.setDate(d.getDate()+1);
   }
 
-  // 找出需要渲染的月份
-  const months = [];
-  const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-  const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-  while (cur <= endMonth) {
-    months.push(new Date(cur));
-    cur.setMonth(cur.getMonth()+1);
-  }
-
-  const today = new Date(); today.setHours(0,0,0,0);
-
-  months.forEach(monthStart => {
-    const y = monthStart.getFullYear();
-    const m = monthStart.getMonth();
-    const firstDow = new Date(y, m, 1).getDay();
-    const daysInMonth = new Date(y, m+1, 0).getDate();
-
-    const wrap = document.createElement('div');
-    wrap.className = 'cal-wrapper';
-    wrap.style.marginBottom = '12px';
-
-    // 月份標題
-    wrap.innerHTML = `
-      <div class="cal-month-header">${y} 年 ${m+1} 月</div>
-      <div class="cal-weekdays">
-        ${['日','一','二','三','四','五','六'].map(w=>`<div class="cal-wd">${w}</div>`).join('')}
-      </div>`;
-
-    const grid = document.createElement('div');
-    grid.className = 'cal-grid';
-
-    // 空格
-    for (let i = 0; i < firstDow; i++) {
-      const empty = document.createElement('div');
-      empty.className = 'cal-cell empty';
-      grid.appendChild(empty);
-    }
-
-    // 日期
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(y, m, day);
-      const key = toKey(date);
-      const dow = date.getDay();
-      const isTo = date.getTime() === today.getTime();
-      const isMk = isMakeup(date);
-      const isHd = isHoliday(date);
-      const isWk = isWeekend(date) && !isMk;
-      const isLv = leaveDays.has(key);
-
-      const cell = document.createElement('div');
-      let cellClass = 'cal-cell';
-      if (dow === 0) cellClass += ' sunday';
-      if (dow === 6) cellClass += ' saturday';
-      if (isTo) cellClass += ' today';
-      if (isLv) cellClass += ' is-leave';
-      else if (isMk) cellClass += ' is-makeup';
-      else if (isHd && exH) cellClass += ' is-holiday';
-      else if (isWk && exW) cellClass += ' is-weekend';
-      cell.className = cellClass;
-
-      // 請假日：背景用假別顏色
-      if (isLv) {
-        cell.style.background = selectedLeave.color + '22';
-        cell.style.outline = `2px solid ${selectedLeave.color}66`;
-        cell.style.outlineOffset = '-2px';
-      }
-
-      // 數字
-      const num = document.createElement('div');
-      num.className = 'cal-num';
-      num.textContent = day;
-      if (isLv) num.style.color = selectedLeave.color;
-      cell.appendChild(num);
-
-      // 標籤
-      const tags = [];
-      if (isLv) tags.push({ cls: 'tag-leave', text: selectedLeave.label, bg: selectedLeave.color });
-      if (isHd && exH) tags.push({ cls: 'tag-holiday', text: HOLIDAY_NAMES[key]||'假日' });
-      else if (isMk) tags.push({ cls: 'tag-makeup', text: '補班' });
-      else if (isWk && exW && !isLv) tags.push({ cls: 'tag-weekend', text: dow===6?'週六':'週日' });
-
-      tags.slice(0,2).forEach(t => {
-        const tag = document.createElement('div');
-        tag.className = 'cal-tag ' + t.cls;
-        tag.textContent = t.text;
-        if (t.bg) tag.style.background = t.bg + 'cc';
-        cell.appendChild(tag);
-      });
-
-      grid.appendChild(cell);
-    }
-
-    wrap.appendChild(grid);
-    container.appendChild(wrap);
-  });
+  card.appendChild(chips);
+  container.appendChild(card);
 }
 
 // ===== 略過清單 =====
