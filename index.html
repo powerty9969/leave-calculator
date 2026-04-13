@@ -299,48 +299,101 @@ LEAVE_TYPES.forEach(lt => {
   leaveContainer.appendChild(btn);
 });
 
-// ===== 115年（2026年）假日資料 =====
-const HOLIDAYS = new Set([
-  '2026-01-01',                                                     // 元旦
-  '2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20', // 春節
-  '2026-02-27','2026-02-28',                                        // 和平紀念日
-  '2026-04-03','2026-04-04','2026-04-05','2026-04-06',              // 兒童節/清明
-  '2026-05-01',                                                     // 勞動節
-  '2026-06-15',                                                     // 警察節
-  '2026-06-19',                                                     // 端午節
-  '2026-09-25',                                                     // 中秋節
-  '2026-09-28',                                                     // 教師節
-  '2026-12-25',                                                     // 行憲紀念日
-  '2026-10-09','2026-10-10',                                        // 國慶日
-  '2026-10-25','2026-10-26',                                        // 臺灣光復紀念日（10/25週日，10/26補假）
-]);
+// ===== 假日資料（2026–2028）=====
 
-const HOLIDAY_NAMES = {
-  '2026-01-01': '元旦',
-  '2026-02-16': '除夕',
-  '2026-02-17': '春節初一',
-  '2026-02-18': '春節初二',
-  '2026-02-19': '春節初三',
-  '2026-02-20': '彈性放假',
-  '2026-02-27': '和平紀念日補假',
-  '2026-02-28': '和平紀念日',
-  '2026-04-03': '兒童節補假',
-  '2026-04-04': '兒童節',
-  '2026-04-05': '清明節',
-  '2026-04-06': '清明節補假',
-  '2026-05-01': '勞動節',
-  '2026-06-15': '警察節',
-  '2026-06-19': '端午節',
-  '2026-09-25': '中秋節',
-  '2026-09-28': '教師節',
-  '2026-12-25': '行憲紀念日',
-  '2026-10-09': '國慶補假',
-  '2026-10-10': '國慶日',
-  '2026-10-25': '臺灣光復暨金門古寧頭大捷紀念日',
-  '2026-10-26': '臺灣光復紀念日補假',
+// 固定假日（每年相同日期，補假依星期自動計算）
+const FIXED_HOLIDAYS_LIST = [
+  { month: 1,  day: 1,  name: '中華民國開國紀念日' },
+  { month: 2,  day: 28, name: '和平紀念日' },
+  { month: 4,  day: 4,  name: '兒童節' },
+  { month: 5,  day: 1,  name: '勞動節' },
+  { month: 6,  day: 15, name: '警察節' },
+  { month: 9,  day: 28, name: '教師節' },
+  { month: 10, day: 10, name: '國慶日' },
+  { month: 10, day: 25, name: '臺灣光復暨金門古寧頭大捷紀念日' },
+  { month: 12, day: 25, name: '行憲紀念日' },
+];
+
+// 農曆及彈性假日查表（依年份）
+const LUNAR_DB = {
+  2026: {
+    holidays: {
+      '2026-02-16': '除夕',
+      '2026-02-17': '春節初一',
+      '2026-02-18': '春節初二',
+      '2026-02-19': '春節初三',
+      '2026-02-20': '彈性放假',
+      '2026-04-05': '清明節',
+      '2026-06-19': '端午節',
+      '2026-09-25': '中秋節',
+    },
+    makeup: ['2026-02-14'],
+  },
+  2027: {
+    holidays: {
+      '2027-02-05': '除夕',
+      '2027-02-06': '春節初一',
+      '2027-02-07': '春節初二',
+      '2027-02-08': '春節初三',
+      '2027-04-05': '清明節',
+      '2027-06-09': '端午節',
+      '2027-10-15': '中秋節',
+    },
+    makeup: [],
+  },
+  2028: {
+    holidays: {
+      '2028-01-25': '除夕',
+      '2028-01-26': '春節初一',
+      '2028-01-27': '春節初二',
+      '2028-01-28': '春節初三',
+      '2028-04-04': '清明節',
+      '2028-06-14': '端午節',
+      '2028-10-03': '中秋節',
+    },
+    makeup: [],
+  },
 };
 
-const MAKEUP_WORKDAYS = new Set(['2026-02-14']); // 春節前補班
+// 動態建立全年假日資料
+function buildAllHolidays() {
+  const holidays = new Set();
+  const names = {};
+  const makeups = new Set();
+
+  [2026, 2027, 2028].forEach(year => {
+    // 固定假日 + 自動補假（週日→週一，週六→週五）
+    FIXED_HOLIDAYS_LIST.forEach(({ month, day, name }) => {
+      const date = new Date(year, month - 1, day);
+      const key = toKey(date);
+      const dow = date.getDay();
+      holidays.add(key);
+      names[key] = name;
+
+      if (dow === 0) {
+        const mk = toKey(new Date(year, month - 1, day + 1));
+        if (!names[mk]) { holidays.add(mk); names[mk] = name + '補假'; }
+      } else if (dow === 6) {
+        const mk = toKey(new Date(year, month - 1, day - 1));
+        if (!names[mk]) { holidays.add(mk); names[mk] = name + '補假'; }
+      }
+    });
+
+    // 農曆假日
+    const lunar = LUNAR_DB[year];
+    if (lunar) {
+      Object.entries(lunar.holidays).forEach(([k, n]) => {
+        holidays.add(k); names[k] = n;
+      });
+      (lunar.makeup || []).forEach(k => makeups.add(k));
+    }
+  });
+
+  return { holidays, names, makeups };
+}
+
+const { holidays: HOLIDAYS, names: HOLIDAY_NAMES_OBJ, makeups: MAKEUP_WORKDAYS } = buildAllHolidays();
+const HOLIDAY_NAMES = HOLIDAY_NAMES_OBJ;
 
 // ===== 工具 =====
 const WEEKDAYS = ['日','一','二','三','四','五','六'];
