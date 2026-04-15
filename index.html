@@ -165,6 +165,19 @@
     .skipped-reason.holiday { background: rgba(255,214,10,0.15); color: var(--yellow); }
     .no-skipped { padding: 14px; text-align: center; color: var(--text2); font-size: 13px; }
 
+    /* Custom holidays */
+    .custom-holiday-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .add-btn { background: var(--accent); border: none; color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; padding: 9px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+    .add-btn:hover { opacity: 0.85; }
+    .custom-holiday-list { display: flex; flex-direction: column; gap: 6px; }
+    .custom-holiday-item { display: flex; justify-content: space-between; align-items: center; background: var(--surface2); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+    .custom-holiday-item .ch-info { display: flex; gap: 10px; align-items: center; }
+    .custom-holiday-item .ch-date { color: var(--text2); font-size: 12px; }
+    .custom-holiday-item .ch-name { color: var(--yellow); font-weight: 600; }
+    .del-btn { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1; }
+    .del-btn:hover { color: var(--red); }
+    .no-custom { font-size: 13px; color: var(--text2); text-align: center; padding: 8px 0; }
+
     @media (max-width: 480px) {
       .form-row { grid-template-columns: 1fr; }
       .cal-cell { min-height: 40px; }
@@ -210,6 +223,17 @@
       <label>結束日期（請假末日）</label>
       <input type="date" id="endDate">
     </div>
+  </div>
+
+  <!-- 自訂假日 -->
+  <div class="card">
+    <div class="card-title">自訂假日</div>
+    <div class="custom-holiday-form">
+      <input type="date" id="customDate" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:14px;font-family:inherit;outline:none;width:100%;">
+      <input type="text" id="customName" placeholder="節日名稱" autocomplete="off" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:14px;font-family:inherit;outline:none;width:100%;">
+      <button class="add-btn" id="addCustomBtn">新增</button>
+    </div>
+    <div class="custom-holiday-list" id="customHolidayList"></div>
   </div>
 
   <!-- 選項 -->
@@ -395,6 +419,65 @@ function buildAllHolidays() {
 
 const { holidays: HOLIDAYS, names: HOLIDAY_NAMES_OBJ, makeups: MAKEUP_WORKDAYS } = buildAllHolidays();
 const HOLIDAY_NAMES = HOLIDAY_NAMES_OBJ;
+
+// ===== 自訂假日 =====
+let customHolidays = JSON.parse(localStorage.getItem('custom_holidays') || '{}');
+
+function applyCustomHolidays() {
+  // 先清除上次自訂的（避免重複）
+  Object.keys(customHolidays).forEach(k => {
+    HOLIDAYS.add(k);
+    HOLIDAY_NAMES[k] = customHolidays[k];
+  });
+}
+
+function saveAndApply() {
+  localStorage.setItem('custom_holidays', JSON.stringify(customHolidays));
+  applyCustomHolidays();
+  renderCustomList();
+  clearResult();
+}
+
+function renderCustomList() {
+  const list = document.getElementById('customHolidayList');
+  const keys = Object.keys(customHolidays).sort();
+  if (!keys.length) {
+    list.innerHTML = '<div class="no-custom">尚未新增自訂假日</div>';
+    return;
+  }
+  list.innerHTML = keys.map(k => {
+    const d = fromKey(k);
+    const label = `${d.getMonth()+1}/${d.getDate()}（週${['日','一','二','三','四','五','六'][d.getDay()]}）`;
+    return `<div class="custom-holiday-item">
+      <div class="ch-info">
+        <span class="ch-date">${label}</span>
+        <span class="ch-name">${customHolidays[k]}</span>
+      </div>
+      <button class="del-btn" onclick="deleteCustomHoliday('${k}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteCustomHoliday(key) {
+  delete customHolidays[key];
+  HOLIDAYS.delete(key);
+  delete HOLIDAY_NAMES[key];
+  saveAndApply();
+}
+
+document.getElementById('addCustomBtn').addEventListener('click', () => {
+  const dateVal = document.getElementById('customDate').value;
+  const nameVal = document.getElementById('customName').value.trim();
+  if (!dateVal) { alert('請選擇日期'); return; }
+  if (!nameVal) { alert('請輸入節日名稱'); return; }
+  customHolidays[dateVal] = nameVal;
+  document.getElementById('customDate').value = '';
+  document.getElementById('customName').value = '';
+  saveAndApply();
+});
+
+applyCustomHolidays();
+renderCustomList();
 
 // ===== 工具 =====
 const WEEKDAYS = ['日','一','二','三','四','五','六'];
