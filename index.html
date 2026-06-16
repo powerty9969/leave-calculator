@@ -193,11 +193,6 @@
     <p>依據人事行政總處中華民國 115～117 年行事曆</p>
   </div>
 
-  <div class="mode-selector">
-    <button class="mode-btn active" data-mode="calc-end">計算請畢日期</button>
-    <button class="mode-btn" data-mode="calc-days">計算請假天數</button>
-  </div>
-
   <!-- 假別 -->
   <div class="card">
     <div class="card-title">假別</div>
@@ -214,6 +209,13 @@
     <div class="form-group">
       <label>開始日期（請假首日）</label>
       <input type="date" id="startDate">
+    </div>
+    <div class="form-group">
+      <label>計算方式</label>
+      <div class="mode-selector" style="margin-top:6px;">
+        <button class="mode-btn active" data-mode="calc-end">輸入天數，計算請畢日</button>
+        <button class="mode-btn" data-mode="calc-days">輸入結束日期，計算天數</button>
+      </div>
     </div>
     <div id="daysInputGroup" class="form-group">
       <label>請假天數（支援半天，如 0.5、1.5）</label>
